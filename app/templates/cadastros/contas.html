@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Contas{% endblock %}
+{% block page_title %}CADASTRO DE CONTAS{% endblock %}
+
+{% block content %}
+<div class="flex justify-end mb-4">
+  <button class="btn-primary px-5 py-2 rounded font-cinzel tracking-wider text-sm flex items-center gap-2"
+    onclick="document.getElementById('form-novo').classList.toggle('hidden')">
+    <i data-feather="plus" class="w-4 h-4"></i> NOVA CONTA
+  </button>
+</div>
+
+<!-- Formulário novo -->
+<div id="form-novo" class="card p-6 mb-6 hidden">
+  <h3 class="font-cinzel text-sm tracking-wider mb-4" style="color:var(--dourado);">NOVA CONTA</h3>
+  <div class="gold-line mb-4"></div>
+  <form action="/cadastros/contas/novo" method="post" class="flex flex-wrap gap-4 items-end">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Nome *</label>
+      <input type="text" name="nome" required style="width:200px;" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Tipo *</label>
+      <select name="tipo" style="width:160px;">
+        <option value="corrente">Corrente</option>
+        <option value="poupanca">Poupança</option>
+        <option value="caixa">Caixa</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Saldo Inicial (R$)</label>
+      <input type="number" name="saldo_inicial" step="0.01" value="0" style="width:130px;" />
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2 rounded text-sm font-cinzel tracking-wider">SALVAR</button>
+  </form>
+</div>
+
+<div class="card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">NOME</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">TIPO</th>
+        <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">SALDO INICIAL</th>
+        <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">ATIVO</th>
+        <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">AÇÕES</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contas %}
+      <tr>
+        <td class="p-3">{{ c.nome }}</td>
+        <td class="p-3 capitalize">{{ c.tipo }}</td>
+        <td class="p-3 text-right">R$ {{ "%.2f"|format(c.saldo_inicial) }}</td>
+        <td class="p-3 text-center">
+          {% if c.ativo %}<span style="color:#4CAF7D;">●</span>{% else %}<span style="color:#888;">●</span>{% endif %}
+        </td>
+        <td class="p-3 text-center">
+          <div class="flex gap-2 justify-center">
+            <button class="p-1" style="color:var(--dourado-claro);"
+              onclick="toggleEdit({{ c.id }})">
+              <i data-feather="edit-2" class="w-4 h-4"></i>
+            </button>
+            <form action="/cadastros/contas/{{ c.id }}/excluir" method="post" onsubmit="return confirm('Excluir?')">
+              <button type="submit" class="p-1" style="color:#f87171;">
+                <i data-feather="trash-2" class="w-4 h-4"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      <tr id="edit-{{ c.id }}" class="hidden" style="background:rgba(212,175,55,0.04);">
+        <td colspan="5" class="p-4">
+          <form action="/cadastros/contas/{{ c.id }}/editar" method="post" class="flex flex-wrap gap-3 items-end">
+            <div>
+              <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Nome</label>
+              <input type="text" name="nome" value="{{ c.nome }}" required style="width:200px;" />
+            </div>
+            <div>
+              <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Tipo</label>
+              <select name="tipo" style="width:160px;">
+                {% for opt in ['corrente','poupanca','caixa','outro'] %}
+                <option value="{{ opt }}" {% if c.tipo == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Saldo Inicial</label>
+              <input type="number" name="saldo_inicial" step="0.01" value="{{ c.saldo_inicial }}" style="width:130px;" />
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" name="ativo" value="true" {% if c.ativo %}checked{% endif %} id="ativo-{{ c.id }}" />
+              <label for="ativo-{{ c.id }}" class="text-xs" style="color:var(--dourado-claro);">Ativo</label>
+            </div>
+            <button type="submit" class="btn-primary px-3 py-1 rounded text-xs font-cinzel tracking-wider">SALVAR</button>
+            <button type="button" onclick="toggleEdit({{ c.id }})" class="btn-secondary px-3 py-1 rounded text-xs">CANCELAR</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="p-8 text-center" style="color:var(--dourado-claro);opacity:.4;">Nenhuma conta cadastrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleEdit(id) {
+  const row = document.getElementById('edit-' + id);
+  row.classList.toggle('hidden');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Cards de resumo -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-cinzel tracking-wider" style="color:var(--dourado-claro);opacity:.7;">SALDO TOTAL</span>
+      <i data-feather="trending-up" style="color:var(--dourado)" class="w-5 h-5"></i>
+    </div>
+    <div class="text-2xl font-semibold" style="color:{% if saldo_total >= 0 %}#4CAF7D{% else %}#f87171{% endif %};">
+      R$ {{ "%.2f"|format(saldo_total) }}
+    </div>
+  </div>
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-cinzel tracking-wider" style="color:var(--dourado-claro);opacity:.7;">ENTRADAS DO MÊS</span>
+      <i data-feather="arrow-down-circle" style="color:#4CAF7D" class="w-5 h-5"></i>
+    </div>
+    <div class="text-2xl font-semibold" style="color:#4CAF7D;">R$ {{ "%.2f"|format(entradas_mes) }}</div>
+  </div>
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-cinzel tracking-wider" style="color:var(--dourado-claro);opacity:.7;">SAÍDAS DO MÊS</span>
+      <i data-feather="arrow-up-circle" style="color:#f87171" class="w-5 h-5"></i>
+    </div>
+    <div class="text-2xl font-semibold" style="color:#f87171;">R$ {{ "%.2f"|format(saidas_mes) }}</div>
+  </div>
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs font-cinzel tracking-wider" style="color:var(--dourado-claro);opacity:.7;">CONCILIAÇÃO PENDENTE</span>
+      <i data-feather="alert-circle" style="color:#E8A838" class="w-5 h-5"></i>
+    </div>
+    <div class="text-2xl font-semibold" style="color:#E8A838;">{{ pendentes_conciliacao }}</div>
+    <a href="/conciliacao" class="text-xs mt-1 block" style="color:var(--dourado-claro);opacity:.7;">Ver transações →</a>
+  </div>
+</div>
+
+<!-- Saldo por conta -->
+{% if saldos_conta %}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+  {% for item in saldos_conta %}
+  <div class="card p-4">
+    <div class="text-xs mb-1" style="color:var(--dourado-claro);opacity:.6;">{{ item.conta.nome }}</div>
+    <div class="font-semibold" style="color:{% if item.saldo >= 0 %}#4CAF7D{% else %}#f87171{% endif %};">
+      R$ {{ "%.2f"|format(item.saldo) }}
+    </div>
+    <div class="text-xs mt-1" style="color:var(--dourado-claro);opacity:.4;">{{ item.conta.tipo }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Gráfico de fluxo do mês -->
+<div class="card p-6 mb-8">
+  <h2 class="font-cinzel text-sm tracking-wider mb-4" style="color:var(--dourado);">FLUXO DO MÊS</h2>
+  <div class="gold-line mb-4"></div>
+  <canvas id="chartFluxo" height="100"></canvas>
+</div>
+
+<!-- Lançamentos vencidos -->
+{% if lancamentos_vencidos %}
+<div class="card p-6 mb-6">
+  <h2 class="font-cinzel text-sm tracking-wider mb-4 flex items-center gap-2" style="color:#E8A838;">
+    <i data-feather="alert-triangle" class="w-4 h-4"></i> LANÇAMENTOS VENCIDOS NÃO REALIZADOS
+  </h2>
+  <div class="gold-line mb-4"></div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DESCRIÇÃO</th>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">VENCIMENTO</th>
+          <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">VALOR</th>
+          <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">STATUS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lancamentos_vencidos %}
+        <tr>
+          <td class="p-3">{{ l.descricao }}</td>
+          <td class="p-3" style="color:#f87171;">{{ l.data_competencia.strftime('%d/%m/%Y') }}</td>
+          <td class="p-3 text-right">R$ {{ "%.2f"|format(l.valor_total) }}</td>
+          <td class="p-3 text-center">
+            <span class="px-2 py-1 rounded text-xs badge-{{ l.status }}">{{ l.status }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ctx = document.getElementById('chartFluxo').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: {{ chart_labels | tojson }},
+    datasets: [
+      {
+        label: 'Entradas',
+        data: {{ chart_entradas | tojson }},
+        borderColor: '#D4AF37',
+        backgroundColor: 'rgba(212,175,55,0.1)',
+        fill: true,
+        tension: 0.3,
+      },
+      {
+        label: 'Saídas',
+        data: {{ chart_saidas | tojson }},
+        borderColor: '#4A7FBF',
+        backgroundColor: 'rgba(74,127,191,0.1)',
+        fill: true,
+        tension: 0.3,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#F8F8F8' } } },
+    scales: {
+      x: { ticks: { color: '#F5E6A7' }, grid: { color: 'rgba(245,230,167,0.07)' } },
+      y: { ticks: { color: '#F5E6A7' }, grid: { color: 'rgba(245,230,167,0.07)' } }
+    }
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Extrato por Conta{% endblock %}
+{% block page_title %}EXTRATO POR CONTA{% endblock %}
+
+{% block content %}
+<div class="card p-4 mb-6">
+  <form method="get" action="/relatorios/extrato-conta" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Conta *</label>
+      <select name="conta_id" required style="width:200px;">
+        <option value="">Selecione</option>
+        {% for c in contas %}
+        <option value="{{ c.id }}" {% if conta_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Início</label>
+      <input type="date" name="data_inicio" value="{{ data_inicio }}" style="width:150px;" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Fim</label>
+      <input type="date" name="data_fim" value="{{ data_fim }}" style="width:150px;" />
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2 rounded text-sm font-cinzel tracking-wider">GERAR</button>
+    {% if conta_id %}
+    <a href="?conta_id={{ conta_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&formato=pdf" class="btn-secondary px-4 py-2 rounded text-sm">PDF</a>
+    <a href="?conta_id={{ conta_id }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&formato=excel" class="btn-secondary px-4 py-2 rounded text-sm">Excel</a>
+    {% endif %}
+  </form>
+</div>
+
+{% if conta and rows_data %}
+<div class="card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DATA</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DESCRIÇÃO</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">TIPO</th>
+        <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">VALOR</th>
+        <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">SALDO</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows_data %}
+      <tr>
+        <td class="p-3">{{ r.transacao.data_pagamento.strftime('%d/%m/%Y') }}</td>
+        <td class="p-3">{{ r.transacao.descricao }}</td>
+        <td class="p-3">
+          {% if r.transacao.tipo == 'entrada' %}<span style="color:#4CAF7D;">↑ Entrada</span>
+          {% else %}<span style="color:#f87171;">↓ Saída</span>{% endif %}
+        </td>
+        <td class="p-3 text-right" style="color:{% if r.transacao.tipo == 'entrada' %}#4CAF7D{% else %}#f87171{% endif %};">
+          R$ {{ "%.2f"|format(r.transacao.valor) }}
+        </td>
+        <td class="p-3 text-right" style="color:{% if r.saldo_corrente >= 0 %}#4CAF7D{% else %}#f87171{% endif %};">
+          R$ {{ "%.2f"|format(r.saldo_corrente) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif conta_id %}
+<div class="card p-8 text-center" style="color:var(--dourado-claro);opacity:.5;">Nenhuma transação no período.</div>
+{% endif %}
+{% endblock %}

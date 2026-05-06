@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Por Categoria{% endblock %}
+{% block page_title %}RELATÓRIO POR CATEGORIA{% endblock %}
+
+{% block content %}
+<div class="card p-4 mb-6">
+  <form method="get" action="/relatorios/por-categoria" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Início</label>
+      <input type="date" name="data_inicio" value="{{ data_inicio }}" style="width:150px;" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Fim</label>
+      <input type="date" name="data_fim" value="{{ data_fim }}" style="width:150px;" />
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2 rounded text-sm font-cinzel tracking-wider">GERAR</button>
+    <a href="?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&formato=pdf" class="btn-secondary px-4 py-2 rounded text-sm">PDF</a>
+    <a href="?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&formato=excel" class="btn-secondary px-4 py-2 rounded text-sm">Excel</a>
+  </form>
+</div>
+
+{% if dados %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+  <div class="card p-6">
+    <h3 class="font-cinzel text-xs tracking-wider mb-4" style="color:var(--dourado);">DISTRIBUIÇÃO SAÍDAS</h3>
+    <canvas id="chartSaidas"></canvas>
+  </div>
+  <div class="card p-6">
+    <h3 class="font-cinzel text-xs tracking-wider mb-4" style="color:var(--dourado);">DISTRIBUIÇÃO ENTRADAS</h3>
+    <canvas id="chartEntradas"></canvas>
+  </div>
+</div>
+
+<div class="card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">CATEGORIA</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">SUBCATEGORIA</th>
+        <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">TOTAL (R$)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in dados %}
+        {% if d.subcategorias %}
+          {% for s in d.subcategorias %}
+          <tr>
+            <td class="p-3 font-semibold">{{ d.categoria.nome if loop.first else '' }}</td>
+            <td class="p-3 pl-6" style="color:var(--dourado-claro);opacity:.8;">{{ s.categoria.nome }}</td>
+            <td class="p-3 text-right">R$ {{ "%.2f"|format(s.total) }}</td>
+          </tr>
+          {% endfor %}
+          <tr style="border-top:1px solid rgba(212,175,55,0.1);">
+            <td colspan="2" class="p-3 font-semibold text-right text-xs" style="color:var(--dourado-claro);">SUBTOTAL</td>
+            <td class="p-3 text-right font-semibold">R$ {{ "%.2f"|format(d.total) }}</td>
+          </tr>
+        {% else %}
+        <tr>
+          <td class="p-3 font-semibold">{{ d.categoria.nome }}</td>
+          <td class="p-3">—</td>
+          <td class="p-3 text-right">R$ {{ "%.2f"|format(d.total) }}</td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card p-8 text-center" style="color:var(--dourado-claro);opacity:.5;">Nenhum dado para o período.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if dados %}
+<script>
+const saidas = {{ dados | selectattr('categoria.tipo', 'equalto', 'saida') | list | map(attribute='categoria.nome') | list | tojson }};
+const saidasVals = {{ dados | selectattr('categoria.tipo', 'equalto', 'saida') | list | map(attribute='total') | map('float') | list | tojson }};
+const entradas = {{ dados | selectattr('categoria.tipo', 'equalto', 'entrada') | list | map(attribute='categoria.nome') | list | tojson }};
+const entradasVals = {{ dados | selectattr('categoria.tipo', 'equalto', 'entrada') | list | map(attribute='total') | map('float') | list | tojson }};
+
+const pieOpts = { responsive: true, plugins: { legend: { labels: { color: '#F5E6A7', font: { size: 11 } } } } };
+new Chart(document.getElementById('chartSaidas').getContext('2d'), {
+  type: 'pie', data: { labels: saidas, datasets: [{ data: saidasVals, backgroundColor: ['#D4AF37','#4A7FBF','#E8A838','#4CAF7D','#9B59B6','#E74C3C'] }] }, options: pieOpts
+});
+new Chart(document.getElementById('chartEntradas').getContext('2d'), {
+  type: 'pie', data: { labels: entradas, datasets: [{ data: entradasVals, backgroundColor: ['#4CAF7D','#D4AF37','#4A7FBF','#F5E6A7','#E8A838'] }] }, options: pieOpts
+});
+</script>
+{% endif %}
+{% endblock %}

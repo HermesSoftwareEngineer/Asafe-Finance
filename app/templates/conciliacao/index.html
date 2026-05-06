@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Conciliação Bancária{% endblock %}
+{% block page_title %}CONCILIAÇÃO BANCÁRIA{% endblock %}
+
+{% block content %}
+{% if mensagem %}
+<div class="mb-6 p-4 rounded" style="background:rgba(76,175,125,0.1);border:1px solid rgba(76,175,125,0.3);color:#4CAF7D;">
+  {{ mensagem }}
+</div>
+{% endif %}
+
+<!-- Upload OFX -->
+<div class="card p-6 mb-8">
+  <h2 class="font-cinzel text-sm tracking-wider mb-4" style="color:var(--dourado);">IMPORTAR EXTRATO OFX</h2>
+  <div class="gold-line mb-4"></div>
+  <form action="/conciliacao/upload" method="post" enctype="multipart/form-data" class="flex flex-wrap gap-4 items-end">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Conta *</label>
+      <select name="conta_id" required style="width:200px;">
+        {% for c in contas %}
+        <option value="{{ c.id }}">{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Arquivo OFX *</label>
+      <input type="file" name="arquivo" accept=".ofx,.OFX" required
+        style="background:var(--azul-escuro);border:1px solid rgba(212,175,55,0.3);color:var(--branco-suave);border-radius:6px;padding:.5rem;" />
+    </div>
+    <button type="submit" class="btn-primary px-5 py-2 rounded font-cinzel tracking-wider text-sm flex items-center gap-2">
+      <i data-feather="upload" class="w-4 h-4"></i> IMPORTAR
+    </button>
+  </form>
+</div>
+
+<!-- Transações pendentes -->
+<div class="card p-6 mb-8">
+  <h2 class="font-cinzel text-sm tracking-wider mb-4" style="color:var(--dourado);">
+    TRANSAÇÕES PENDENTES ({{ pendentes|length }})
+  </h2>
+  <div class="gold-line mb-4"></div>
+
+  {% for t in pendentes %}
+  <div class="mb-6 p-4 rounded" style="background:rgba(212,175,55,0.04);border:1px solid rgba(212,175,55,0.1);">
+    <div class="flex flex-wrap justify-between items-start mb-3 gap-2">
+      <div>
+        <div class="font-semibold">{{ t.descricao }}</div>
+        <div class="text-xs mt-1" style="color:var(--dourado-claro);opacity:.7;">
+          {{ t.data_pagamento.strftime('%d/%m/%Y') }} &nbsp;|&nbsp; {{ t.conta.nome }} &nbsp;|&nbsp; {{ t.forma_pagamento|upper }}
+        </div>
+      </div>
+      <div class="text-lg font-semibold" style="color:{% if t.tipo == 'entrada' %}#4CAF7D{% else %}#f87171{% endif %};">
+        {% if t.tipo == 'saida' %}-{% endif %}R$ {{ "%.2f"|format(t.valor) }}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <!-- Vincular a lançamento existente -->
+      {% if sugestoes[t.id] %}
+      <form action="/conciliacao/vincular/{{ t.id }}" method="post" class="flex gap-2 items-end flex-wrap">
+        <select name="lancamento_id" style="min-width:250px;font-size:.8rem;">
+          {% for l in sugestoes[t.id] %}
+          <option value="{{ l.id }}">{{ l.data_competencia.strftime('%d/%m/%Y') }} — {{ l.descricao }} (R$ {{ "%.2f"|format(l.valor_total) }})</option>
+          {% endfor %}
+        </select>
+        <input type="number" name="valor_vinculado" step="0.01" value="{{ t.valor }}" style="width:110px;font-size:.8rem;" />
+        <button type="submit" class="btn-primary px-3 py-1 rounded text-xs font-cinzel tracking-wider">VINCULAR</button>
+      </form>
+      {% endif %}
+
+      <!-- Criar lançamento -->
+      <form action="/conciliacao/criar-lancamento/{{ t.id }}" method="post" class="flex gap-2 items-end">
+        <input type="text" name="descricao" value="{{ t.descricao }}" style="width:200px;font-size:.8rem;" />
+        <button type="submit" class="btn-secondary px-3 py-1 rounded text-xs">CRIAR LANÇAMENTO</button>
+      </form>
+
+      <!-- Ignorar -->
+      <form action="/conciliacao/ignorar/{{ t.id }}" method="post">
+        <button type="submit" class="px-3 py-1 rounded text-xs" style="border:1px solid #888;color:#888;" onclick="return confirm('Ignorar esta transação?')">IGNORAR</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center py-8" style="color:var(--dourado-claro);opacity:.4;">
+    Nenhuma transação pendente de conciliação.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Histórico de importações -->
+{% if historico %}
+<div class="card p-6">
+  <h2 class="font-cinzel text-sm tracking-wider mb-4" style="color:var(--dourado);">HISTÓRICO DE IMPORTAÇÕES</h2>
+  <div class="gold-line mb-4"></div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DATA IMPORT.</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">ARQUIVO</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">CONTA</th>
+        <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">PERÍODO</th>
+        <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">REGISTROS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in historico %}
+      <tr>
+        <td class="p-3">{{ h.importado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td class="p-3">{{ h.arquivo_nome }}</td>
+        <td class="p-3">{{ h.conta.nome }}</td>
+        <td class="p-3">
+          {% if h.data_inicio %}{{ h.data_inicio.strftime('%d/%m/%Y') }} a {{ h.data_fim.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+        </td>
+        <td class="p-3 text-center">{{ h.total_registros }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

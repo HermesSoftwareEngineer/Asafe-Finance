@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+{% block page_title %}RELATÓRIOS{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+  {% set relatorios = [
+    ('/relatorios/fluxo-caixa', 'bar-chart-2', 'Fluxo de Caixa', 'Entradas, saídas e saldo acumulado por período'),
+    ('/relatorios/por-categoria', 'pie-chart', 'Por Categoria', 'Distribuição de receitas e despesas por categoria'),
+    ('/relatorios/por-centro-custo', 'layers', 'Por Centro de Custo', 'Comparativo entre centros de custo'),
+    ('/relatorios/previsto-realizado', 'activity', 'Previsto vs Realizado', 'Execução orçamentária por categoria'),
+    ('/relatorios/extrato-conta', 'file-text', 'Extrato por Conta', 'Histórico cronológico de transações com saldo corrente'),
+  ] %}
+  {% for url, icon, titulo, descricao in relatorios %}
+  <a href="{{ url }}" class="card p-6 hover:border-yellow-400 transition-all group" style="text-decoration:none;">
+    <div class="flex items-center gap-4 mb-3">
+      <div class="p-3 rounded-lg" style="background:rgba(212,175,55,0.1);">
+        <i data-feather="{{ icon }}" style="color:var(--dourado);" class="w-6 h-6"></i>
+      </div>
+      <h3 class="font-cinzel tracking-wider text-sm" style="color:var(--dourado);">{{ titulo }}</h3>
+    </div>
+    <p class="text-xs" style="color:var(--dourado-claro);opacity:.6;">{{ descricao }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

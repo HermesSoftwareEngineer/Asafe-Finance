@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Transações{% endblock %}
+{% block page_title %}TRANSAÇÕES{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card p-4 mb-6">
+  <form method="get" action="/transacoes" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Conta</label>
+      <select name="conta_id" style="width:160px;">
+        <option value="">Todas as contas</option>
+        {% for c in contas %}
+        <option value="{{ c.id }}" {% if filtros.conta_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Início</label>
+      <input type="date" name="data_inicio" value="{{ filtros.data_inicio or '' }}" style="width:150px;" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Fim</label>
+      <input type="date" name="data_fim" value="{{ filtros.data_fim or '' }}" style="width:150px;" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Conciliação</label>
+      <select name="status_conciliacao" style="width:140px;">
+        <option value="">Todos</option>
+        <option value="pendente" {% if filtros.status_conciliacao == 'pendente' %}selected{% endif %}>Pendente</option>
+        <option value="conciliado" {% if filtros.status_conciliacao == 'conciliado' %}selected{% endif %}>Conciliado</option>
+        <option value="ignorado" {% if filtros.status_conciliacao == 'ignorado' %}selected{% endif %}>Ignorado</option>
+      </select>
+    </div>
+    <button type="submit" class="btn-primary px-4 py-2 rounded text-sm font-cinzel tracking-wider">FILTRAR</button>
+    <a href="/transacoes" class="btn-secondary px-4 py-2 rounded text-sm">Limpar</a>
+  </form>
+</div>
+
+<div class="flex justify-end mb-4">
+  <button class="btn-primary px-5 py-2 rounded font-cinzel tracking-wider text-sm flex items-center gap-2"
+    hx-get="/transacoes/nova"
+    hx-target="#modal-container"
+    hx-swap="innerHTML">
+    <i data-feather="plus" class="w-4 h-4"></i> NOVA TRANSAÇÃO
+  </button>
+</div>
+
+<div class="card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DATA PAG.</th>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">DESCRIÇÃO</th>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">CONTA</th>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">FORMA</th>
+          <th class="text-left p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">TIPO</th>
+          <th class="text-right p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">VALOR</th>
+          <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">CONCILIAÇÃO</th>
+          <th class="text-center p-3 font-cinzel text-xs tracking-wider" style="color:var(--dourado-claro);">AÇÕES</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transacoes %}
+        <tr>
+          <td class="p-3">{{ t.data_pagamento.strftime('%d/%m/%Y') }}</td>
+          <td class="p-3">{{ t.descricao }}</td>
+          <td class="p-3 text-xs" style="color:var(--dourado-claro);opacity:.7;">{{ t.conta.nome }}</td>
+          <td class="p-3 text-xs uppercase">{{ t.forma_pagamento }}</td>
+          <td class="p-3">
+            {% if t.tipo == 'entrada' %}<span style="color:#4CAF7D;">↑ Entrada</span>
+            {% else %}<span style="color:#f87171;">↓ Saída</span>{% endif %}
+          </td>
+          <td class="p-3 text-right">R$ {{ "%.2f"|format(t.valor) }}</td>
+          <td class="p-3 text-center">
+            <span class="px-2 py-1 rounded text-xs badge-{{ t.status_conciliacao }}">{{ t.status_conciliacao }}</span>
+          </td>
+          <td class="p-3 text-center">
+            <div class="flex gap-2 justify-center">
+              <button class="p-1 rounded hover:opacity-80" style="color:var(--dourado-claro);"
+                hx-get="/transacoes/{{ t.id }}/editar"
+                hx-target="#modal-container" hx-swap="innerHTML" title="Editar">
+                <i data-feather="edit-2" class="w-4 h-4"></i>
+              </button>
+              <button class="p-1 rounded hover:opacity-80" style="color:var(--dourado-claro);"
+                hx-get="/transacoes/{{ t.id }}/vincular"
+                hx-target="#modal-container" hx-swap="innerHTML" title="Vincular a lançamento">
+                <i data-feather="link" class="w-4 h-4"></i>
+              </button>
+              <form action="/transacoes/{{ t.id }}/excluir" method="post" onsubmit="return confirm('Excluir esta transação?')">
+                <button type="submit" class="p-1 rounded hover:opacity-80" style="color:#f87171;" title="Excluir">
+                  <i data-feather="trash-2" class="w-4 h-4"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="p-8 text-center" style="color:var(--dourado-claro);opacity:.4;">Nenhuma transação encontrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set pages = (total / per_page)|round(0, 'ceil')|int %}
+  {% if pages > 1 %}
+  <div class="flex justify-center gap-2 p-4">
+    {% for p in range(1, pages + 1) %}
+    <a href="?page={{ p }}" class="px-3 py-1 rounded text-sm {% if p == page %}btn-primary{% else %}btn-secondary{% endif %}">{{ p }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<div id="modal-container"></div>
+{% endblock %}

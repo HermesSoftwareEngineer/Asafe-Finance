@@ -1,0 +1,40 @@
+<div class="modal-box p-6 w-full max-w-lg">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="font-cinzel tracking-wider" style="color:var(--dourado);">VINCULAR A LANÇAMENTO</h2>
+    <button onclick="closeModal()" style="color:var(--dourado-claro);opacity:.6;"><i data-feather="x" class="w-5 h-5"></i></button>
+  </div>
+  <div class="gold-line mb-4"></div>
+
+  <div class="mb-4 text-sm">
+    <strong>{{ transacao.descricao }}</strong>
+    &nbsp;|&nbsp; R$ {{ "%.2f"|format(transacao.valor) }}
+    &nbsp;|&nbsp; {{ transacao.data_pagamento.strftime('%d/%m/%Y') }}
+  </div>
+
+  {% if lancamentos %}
+  <form action="/transacoes/{{ transacao.id }}/vincular" method="post" class="flex flex-col gap-4">
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Lançamento *</label>
+      <select name="lancamento_id" required>
+        {% for l in lancamentos %}
+        <option value="{{ l.id }}">{{ l.data_competencia.strftime('%d/%m/%Y') }} — {{ l.descricao }} (R$ {{ "%.2f"|format(l.valor_total) }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs mb-1" style="color:var(--dourado-claro);">Valor Vinculado *</label>
+      <input type="number" name="valor_vinculado" step="0.01" min="0.01" required value="{{ transacao.valor }}" />
+    </div>
+    <div class="flex gap-3">
+      <button type="submit" class="btn-primary flex-1 py-2 rounded font-cinzel tracking-wider text-sm">VINCULAR</button>
+      <button type="button" onclick="closeModal()" class="btn-secondary flex-1 py-2 rounded text-sm">CANCELAR</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="text-sm text-center py-4" style="color:var(--dourado-claro);opacity:.5;">
+    Nenhum lançamento compatível encontrado (mesmo tipo e período ±30 dias).
+  </p>
+  <button onclick="closeModal()" class="btn-secondary w-full py-2 rounded text-sm">FECHAR</button>
+  {% endif %}
+</div>
+<script>feather.replace();</script>
