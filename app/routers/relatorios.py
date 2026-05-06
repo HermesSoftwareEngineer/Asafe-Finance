@@ -3,16 +3,16 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Conta, Usuario
 from app.services import relatorio_service, export_service
+from app.templates_config import templates
+
 
 router = APIRouter(prefix="/relatorios")
-templates = Jinja2Templates(directory="app/templates")
 
 _HOJE = date.today
 _MES_INICIO = lambda: date.today().replace(day=1)

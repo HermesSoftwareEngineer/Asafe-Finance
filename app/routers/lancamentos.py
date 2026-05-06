@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -13,9 +12,10 @@ from app.models import (
     Categoria, CentroCusto, Lancamento, LancamentoTransacao,
     TipoLancamento, Transacao, Usuario,
 )
+from app.templates_config import templates
+
 
 router = APIRouter(prefix="/lancamentos")
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _get_categorias_folha(db: Session, tipo: Optional[str] = None):

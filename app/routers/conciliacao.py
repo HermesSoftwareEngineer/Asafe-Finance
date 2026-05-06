@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -14,9 +13,10 @@ from app.models import (
     StatusConciliacao, Transacao, Usuario,
 )
 from app.services.ofx_service import importar_ofx
+from app.templates_config import templates
+
 
 router = APIRouter(prefix="/conciliacao")
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("", response_class=HTMLResponse)
@@ -158,4 +158,3 @@ async def criar_lancamento_da_transacao(
     db.add(vinculo)
     t.status_conciliacao = StatusConciliacao.conciliado
     db.commit()
-    return RedirectResponse("/conciliacao", status_code=302)

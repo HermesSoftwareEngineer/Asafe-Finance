@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import authenticate_user, create_access_token, get_current_user, hash_password, verify_password
 from app.database import get_db
 from app.models import Usuario
+from app.templates_config import templates
+
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -73,4 +73,3 @@ async def alterar_senha(
     current_user.senha_hash = hash_password(nova_senha)
     db.commit()
     ctx["success"] = "Senha alterada com sucesso!"
-    return templates.TemplateResponse("alterar_senha.html", ctx)
