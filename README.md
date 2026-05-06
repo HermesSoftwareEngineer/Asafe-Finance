@@ -25,7 +25,7 @@ Acesse: http://127.0.0.1:8000
 
 ---
 
-## Deploy no Google Cloud Run
+## Deploy no Google Cloud Run + Supabase
 
 ### Pré-requisitos
 
@@ -34,33 +34,29 @@ gcloud auth login
 gcloud config set project SEU_PROJECT_ID
 ```
 
-### 1. Criar o banco de dados (Cloud SQL — PostgreSQL)
+### 1. Configurar o banco no Supabase
 
-```bash
-# Criar instância
-gcloud sql instances create asafe-db \
-  --database-version=POSTGRES_15 \
-  --tier=db-f1-micro \
-  --region=us-central1
+1. Crie um projeto em [supabase.com](https://supabase.com)
+2. Vá em **Project Settings → Database**
+3. Copie a string de conexão do **Transaction Pooler** (porta 6543 — recomendado para Cloud Run)
 
-# Criar banco e usuário
-gcloud sql databases create asafe_finance --instance=asafe-db
-gcloud sql users create asafe_user --instance=asafe-db --password=SENHA_SEGURA
-
-# Obter o nome de conexão (usado na DATABASE_URL)
-gcloud sql instances describe asafe-db --format="value(connectionName)"
-# Ex: meu-projeto:us-central1:asafe-db
+A URL terá este formato:
 ```
+postgresql+psycopg2://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require
+```
+
+> Use o **Transaction Pooler** (porta 6543), não a conexão direta (porta 5432).
+> O Transaction Pooler é compatível com ambientes serverless e evita esgotar as conexões.
 
 ### 2. Criar os segredos no Secret Manager
 
 ```bash
-# Chave JWT — gere uma string aleatória forte
+# Chave JWT — string aleatória forte
 echo -n "$(python -c 'import secrets; print(secrets.token_hex(32))')" | \
   gcloud secrets create asafe-secret-key --data-file=-
 
-# URL do banco (socket do Cloud SQL)
-echo -n "postgresql+psycopg2://asafe_user:SENHA_SEGURA@/asafe_finance?host=/cloudsql/meu-projeto:us-central1:asafe-db" | \
+# URL do Supabase (Transaction Pooler)
+echo -n "postgresql+psycopg2://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require" | \
   gcloud secrets create asafe-database-url --data-file=-
 ```
 
@@ -72,7 +68,7 @@ gcloud artifacts repositories create asafe-finance \
   --location=us-central1
 ```
 
-### 4. Configurar permissões da Service Account do Cloud Build
+### 4. Configurar permissões do Cloud Build
 
 ```bash
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
@@ -84,22 +80,19 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:$SA" --role="roles/secretmanager.secretAccessor"
 
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA" --role="roles/cloudsql.client"
-
 gcloud iam service-accounts add-iam-policy-binding \
   $PROJECT_NUMBER-compute@developer.gserviceaccount.com \
   --member="serviceAccount:$SA" --role="roles/iam.serviceAccountUser"
 ```
 
-### 5. Deploy manual (primeira vez)
+### 5. Deploy
 
 ```bash
-# Build e push da imagem
+# Via Cloud Build (recomendado)
 gcloud builds submit --config cloudbuild.yaml \
   --substitutions=_REGION=us-central1,_REPO=asafe-finance,_SERVICE=asafe-finance
 
-# Ou via Docker diretamente:
+# Ou manual via Docker:
 IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/asafe-finance/asafe-finance:latest"
 docker build -t $IMAGE .
 docker push $IMAGE
@@ -109,7 +102,6 @@ gcloud run deploy asafe-finance \
   --region=us-central1 \
   --platform=managed \
   --allow-unauthenticated \
-  --add-cloudsql-instances=meu-projeto:us-central1:asafe-db \
   --set-secrets="SECRET_KEY=asafe-secret-key:latest,DATABASE_URL=asafe-database-url:latest" \
   --memory=512Mi \
   --cpu=1 \
@@ -132,7 +124,7 @@ gcloud builds triggers create github \
 
 | Variável | Descrição | Obrigatória |
 |----------|-----------|-------------|
-| `DATABASE_URL` | URL de conexão PostgreSQL | Sim |
+| `DATABASE_URL` | URL do Supabase (Transaction Pooler) com `?sslmode=require` | Sim |
 | `SECRET_KEY` | Chave JWT (32+ chars aleatórios) | Sim |
 | `ADMIN_EMAIL` | E-mail do admin inicial | Não (padrão: `admin@sistema.com`) |
 | `ADMIN_PASSWORD` | Senha do admin inicial | Não (padrão: `admin123`) |
@@ -160,7 +152,7 @@ alembic downgrade -1
 app/
 ├── main.py              # Ponto de entrada + lifespan + seed
 ├── config.py            # Settings via env vars (pydantic-settings)
-├── database.py          # Engine SQLAlchemy (SQLite / PostgreSQL)
+├── database.py          # Engine SQLAlchemy (SQLite local / Supabase prod)
 ├── models.py            # Modelos ORM
 ├── schemas.py           # Validações Pydantic
 ├── auth.py              # JWT + bcrypt
