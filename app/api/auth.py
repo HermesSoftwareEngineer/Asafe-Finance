@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import authenticate_user, create_access_token, verify_password, hash_password
+from app.config import settings
 from app.database import get_db
 from app.models import Usuario
 from app.api.deps import get_current_user
@@ -23,16 +24,22 @@ class AlterarSenhaBody(BaseModel):
 
 
 @router.post("/login")
-def login(body: LoginBody, response: Response, db: Session = Depends(get_db)):
+def login(body: LoginBody, response: Response, request: Request, db: Session = Depends(get_db)):
     user = authenticate_user(db, body.email, body.password)
     if not user:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     token = create_access_token({"sub": str(user.id)})
+    
+    # Detecta se está em HTTPS (produção)
+    is_https = request.url.scheme == "https"
+    
+    # Em domínios diferentes (Vercel + Cloud Run), precisa samesite="none" + secure=True
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        samesite="lax",
+        samesite="none" if is_https else "lax",
+        secure=is_https,
         max_age=60 * 480,
     )
     return {"id": user.id, "nome": user.nome, "email": user.email, "is_admin": user.is_admin}
