@@ -35,16 +35,6 @@ class StatusLancamento(str, PyEnum):
     realizado = "realizado"
 
 
-class FormaPagamento(str, PyEnum):
-    pix = "pix"
-    boleto = "boleto"
-    ted = "ted"
-    doc = "doc"
-    debito = "debito"
-    credito = "credito"
-    dinheiro = "dinheiro"
-    outro = "outro"
-
 
 class StatusConciliacao(str, PyEnum):
     pendente = "pendente"
@@ -150,7 +140,7 @@ class Transacao(Base):
     valor = Column(Numeric(10, 2), nullable=False)
     data_pagamento = Column(Date, nullable=False)
     conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False)
-    forma_pagamento = Column(Enum(FormaPagamento), nullable=False)
+    forma_pagamento = Column(String(50), nullable=False)
     status_conciliacao = Column(Enum(StatusConciliacao), default=StatusConciliacao.pendente, nullable=False)
     ofx_transaction_id = Column(String(100), nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)

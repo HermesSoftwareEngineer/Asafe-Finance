@@ -1,14 +1,21 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, SessionLocal
 from app.models import Base, Categoria, CentroCusto, Conta, Usuario
 from app.auth import hash_password
-from app.templates_config import templates
-from app.routers import auth, dashboard, lancamentos, transacoes, conciliacao, relatorios, cadastros
+from app.api import (
+    auth as api_auth,
+    dashboard as api_dashboard,
+    lancamentos as api_lancamentos,
+    transacoes as api_transacoes,
+    conciliacao as api_conciliacao,
+    relatorios as api_relatorios,
+    cadastros as api_cadastros,
+)
 
 
 def _seed_database():
@@ -69,22 +76,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Asafe Finance — Ministério Asafe Vocal", lifespan=lifespan)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app.include_router(auth.router)
-app.include_router(dashboard.router)
-app.include_router(lancamentos.router)
-app.include_router(transacoes.router)
-app.include_router(conciliacao.router)
-app.include_router(relatorios.router)
-app.include_router(cadastros.router)
-
-
-@app.exception_handler(403)
-async def forbidden_handler(request: Request, exc):
-    return templates.TemplateResponse("403.html", {"request": request}, status_code=403)
-
-
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc):
-    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+app.include_router(api_auth.router)
+app.include_router(api_dashboard.router)
+app.include_router(api_lancamentos.router)
+app.include_router(api_transacoes.router)
+app.include_router(api_conciliacao.router)
+app.include_router(api_relatorios.router)
+app.include_router(api_cadastros.router)

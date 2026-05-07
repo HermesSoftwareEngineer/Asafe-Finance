@@ -4,7 +4,7 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
-_url = settings.database_url
+_url = settings.resolved_database_url
 _is_sqlite = _url.startswith("sqlite")
 
 if _is_sqlite:

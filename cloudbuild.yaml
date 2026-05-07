@@ -32,7 +32,7 @@ steps:
       - --memory=512Mi
       - --cpu=1
       - --timeout=300
-      - --set-secrets=SECRET_KEY=asafe-secret-key:latest,DATABASE_URL=asafe-database-url:latest
+      - --set-secrets=SECRET_KEY=asafe-secret-key:latest,DATABASE_URL=asafe-database-url:latest,FRONTEND_URL=asafe-frontend-url:latest
 
 substitutions:
   _REGION: us-central1
