@@ -35,6 +35,19 @@ class StatusLancamento(str, PyEnum):
     realizado = "realizado"
 
 
+class TipoRecorrencia(str, PyEnum):
+    unico = "unico"
+    fixo = "fixo"
+    parcelado = "parcelado"
+
+
+class FrequenciaRecorrencia(str, PyEnum):
+    diario = "diario"
+    semanal = "semanal"
+    quinzenal = "quinzenal"
+    mensal = "mensal"
+
+
 
 class StatusConciliacao(str, PyEnum):
     pendente = "pendente"
@@ -108,6 +121,14 @@ class Lancamento(Base):
     centro_custo_id = Column(Integer, ForeignKey("centros_custo.id"), nullable=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     observacao = Column(Text, nullable=True)
+    
+    # Recorrência
+    tipo_recorrencia = Column(Enum(TipoRecorrencia), default=TipoRecorrencia.unico, nullable=False)
+    frequencia_recorrencia = Column(Enum(FrequenciaRecorrencia), nullable=True)  # Para fixos
+    quantidade_parcelas = Column(Integer, nullable=True)  # Para parcelados
+    numero_parcela = Column(Integer, nullable=True)  # Qual parcela é esta (1, 2, 3...)
+    lancamento_pai_id = Column(Integer, ForeignKey("lancamentos.id"), nullable=True)  # Para recorrentes
+    
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -115,6 +136,7 @@ class Lancamento(Base):
     categoria = relationship("Categoria", back_populates="lancamentos")
     centro_custo = relationship("CentroCusto", back_populates="lancamentos")
     vinculos = relationship("LancamentoTransacao", back_populates="lancamento", cascade="all, delete-orphan")
+    lancamento_pai = relationship("Lancamento", remote_side=[id], backref="lancamentos_gerados")
 
     @property
     def valor_pago(self) -> Decimal:

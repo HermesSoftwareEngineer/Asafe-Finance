@@ -7,8 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Lancamento, LancamentoTransacao, StatusConciliacao, Transacao, Usuario
+from app.models import (
+    Lancamento, LancamentoTransacao, StatusConciliacao, Transacao, Usuario,
+    TipoRecorrencia, FrequenciaRecorrencia,
+)
 from app.api.deps import get_current_user
+from app.services.lancamento_recurrence_service import gerar_lancamentos_parcelados
 
 
 router = APIRouter(prefix="/api/lancamentos", tags=["lancamentos"])
@@ -17,6 +21,14 @@ PER_PAGE = 20
 
 
 class LancamentoBody(BaseModel):
+    """
+    Body para criar/editar lançamentos.
+    
+    **Campos de recorrência:**
+    - `tipo_recorrencia`: "unico" (padrão), "fixo" (recorrente com frequência), "parcelado" (múltiplas parcelas)
+    - `frequencia_recorrencia`: para fixos → "diario", "semanal", "quinzenal", "mensal"
+    - `quantidade_parcelas`: para parcelados → número de parcelas (ex: 12)
+    """
     descricao: str
     tipo: str
     valor_total: float
@@ -24,6 +36,9 @@ class LancamentoBody(BaseModel):
     categoria_id: Optional[int] = None
     centro_custo_id: Optional[int] = None
     observacao: Optional[str] = None
+    tipo_recorrencia: str = "unico"
+    frequencia_recorrencia: Optional[str] = None
+    quantidade_parcelas: Optional[int] = None
 
 
 def _lancamento_to_dict(l: Lancamento) -> dict:
@@ -40,6 +55,11 @@ def _lancamento_to_dict(l: Lancamento) -> dict:
         "centro_custo_id": l.centro_custo_id,
         "centro_custo_nome": l.centro_custo.nome if l.centro_custo else None,
         "observacao": l.observacao,
+        "tipo_recorrencia": l.tipo_recorrencia,
+        "frequencia_recorrencia": l.frequencia_recorrencia,
+        "quantidade_parcelas": l.quantidade_parcelas,
+        "numero_parcela": l.numero_parcela,
+        "lancamento_pai_id": l.lancamento_pai_id,
     }
 
 
@@ -89,12 +109,32 @@ def criar_lancamento(
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    Criar um novo lançamento.
+    
+    **Tipos de lançamento:**
+    - `unico`: Lançamento simples, sem recorrência
+    - `fixo`: Recorrente (ex: aluguel mensal). Requer `frequencia_recorrencia`
+    - `parcelado`: Múltiplas parcelas (ex: 12x). Requer `quantidade_parcelas`
+    """
     if body.valor_total <= 0:
         raise HTTPException(status_code=400, detail="O valor deve ser maior que zero")
     try:
         data_competencia = date.fromisoformat(body.data_competencia)
     except ValueError:
         raise HTTPException(status_code=400, detail="data_competencia inválida (use YYYY-MM-DD)")
+
+    # Validar recorrência
+    if body.tipo_recorrencia == "fixo" and not body.frequencia_recorrencia:
+        raise HTTPException(
+            status_code=400,
+            detail="tipo_recorrencia 'fixo' requer 'frequencia_recorrencia' (diario, semanal, quinzenal, mensal)"
+        )
+    if body.tipo_recorrencia == "parcelado" and not body.quantidade_parcelas:
+        raise HTTPException(
+            status_code=400,
+            detail="tipo_recorrencia 'parcelado' requer 'quantidade_parcelas' (ex: 12)"
+        )
 
     lancamento = Lancamento(
         descricao=body.descricao,
@@ -105,8 +145,17 @@ def criar_lancamento(
         centro_custo_id=body.centro_custo_id or None,
         observacao=body.observacao,
         usuario_id=current_user.id,
+        tipo_recorrencia=body.tipo_recorrencia or TipoRecorrencia.unico,
+        frequencia_recorrencia=body.frequencia_recorrencia,
+        quantidade_parcelas=body.quantidade_parcelas if body.tipo_recorrencia == "parcelado" else None,
     )
     db.add(lancamento)
+    db.flush()
+
+    # Se for parcelado, gera os lançamentos das parcelas
+    if body.tipo_recorrencia == "parcelado":
+        gerar_lancamentos_parcelados(lancamento, body.quantidade_parcelas, db)
+
     db.commit()
     db.refresh(lancamento)
     return _lancamento_to_dict(lancamento)
@@ -139,6 +188,69 @@ def editar_lancamento(
     db.commit()
     db.refresh(lancamento)
     return _lancamento_to_dict(lancamento)
+
+
+class CriarTransacaoAutomaticaBody(BaseModel):
+    """Body para criar transação automática para um lançamento."""
+    conta_id: int
+    forma_pagamento: str = "transferência"
+
+
+@router.post("/{lancamento_id}/criar-transacao")
+def criar_transacao_automatica(
+    lancamento_id: int,
+    body: CriarTransacaoAutomaticaBody,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Criar uma transação automaticamente para um lançamento e vinculá-la.
+    
+    Isso marca o lançamento como **pago** imediatamente.
+    
+    **Exemplo:**
+    ```json
+    {
+        "conta_id": 1,
+        "forma_pagamento": "transferência"
+    }
+    ```
+    
+    **Resposta:** Retorna o lançamento atualizado com status "realizado".
+    """
+    lancamento = db.query(Lancamento).filter(Lancamento.id == lancamento_id).first()
+    if not lancamento:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    
+    # Criar a transação
+    transacao = Transacao(
+        descricao=lancamento.descricao,
+        tipo=lancamento.tipo,
+        valor=lancamento.valor_total,
+        data_pagamento=lancamento.data_competencia,
+        conta_id=body.conta_id,
+        forma_pagamento=body.forma_pagamento,
+        status_conciliacao=StatusConciliacao.conciliado,  # Marca como conciliado automaticamente
+        usuario_id=current_user.id,
+    )
+    db.add(transacao)
+    db.flush()
+
+    # Vincular a transação ao lançamento
+    vinculo = LancamentoTransacao(
+        lancamento_id=lancamento.id,
+        transacao_id=transacao.id,
+        valor_vinculado=lancamento.valor_total,
+    )
+    db.add(vinculo)
+    db.commit()
+    db.refresh(lancamento)
+
+    return {
+        "lancamento": _lancamento_to_dict(lancamento),
+        "transacao_id": transacao.id,
+        "mensagem": f"Transação criada e vinculada ao lançamento. Status: {lancamento.status}"
+    }
 
 
 @router.delete("/{lancamento_id}")

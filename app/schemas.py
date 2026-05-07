@@ -73,6 +73,11 @@ class LancamentoCreate(BaseModel):
     categoria_id: Optional[int] = None
     centro_custo_id: Optional[int] = None
     observacao: Optional[str] = None
+    
+    # Recorrência
+    tipo_recorrencia: str = "unico"  # unico, fixo, parcelado
+    frequencia_recorrencia: Optional[str] = None  # diario, semanal, quinzenal, mensal (para fixos)
+    quantidade_parcelas: Optional[int] = None  # Para parcelados (ex: 12)
 
     @field_validator("valor_total")
     @classmethod
