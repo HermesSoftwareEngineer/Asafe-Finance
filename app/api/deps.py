@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError
 from sqlalchemy.orm import Session
@@ -6,10 +8,13 @@ from app.auth import decode_token
 from app.database import get_db
 from app.models import Usuario
 
+logger = logging.getLogger(__name__)
+
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> Usuario:
     token = request.cookies.get("access_token")
     if not token:
+        logger.warning("get_current_user: cookie ausente. cookies=%s", list(request.cookies.keys()))
         raise HTTPException(status_code=401, detail="Não autenticado")
     try:
         payload = decode_token(token)

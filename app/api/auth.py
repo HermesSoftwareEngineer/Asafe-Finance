@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -7,6 +9,8 @@ from app.config import settings
 from app.database import get_db
 from app.models import Usuario
 from app.api.deps import get_current_user
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -29,11 +33,14 @@ def login(body: LoginBody, response: Response, request: Request, db: Session = D
     if not user:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
     token = create_access_token({"sub": str(user.id)})
-    
-    # Detecta se está em HTTPS (produção)
-    is_https = request.url.scheme == "https"
-    
-    # Em domínios diferentes (Vercel + Cloud Run), precisa samesite="none" + secure=True
+
+    # Cloud Run termina TLS no load balancer; request.url.scheme é sempre "http" internamente.
+    # X-Forwarded-Proto é a fonte confiável para saber se o cliente usou HTTPS.
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    is_https = forwarded_proto == "https"
+    logger.info("login cookie: forwarded_proto=%s is_https=%s samesite=%s",
+                forwarded_proto, is_https, "none" if is_https else "lax")
+
     response.set_cookie(
         key="access_token",
         value=token,
