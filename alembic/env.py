@@ -10,7 +10,7 @@ if config.config_file_name is not None:
 
 # Override sqlalchemy.url from environment / app config
 from app.config import settings
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.resolved_database_url)
 
 from app.models import Base
 target_metadata = Base.metadata

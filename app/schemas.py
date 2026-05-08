@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
@@ -45,6 +45,7 @@ class CategoriaCreate(BaseModel):
     tipo: str
     categoria_pai_id: Optional[int] = None
     cor: str = "#D4AF37"
+    icone: Optional[str] = None
     ativo: bool = True
 
 
@@ -69,15 +70,12 @@ class LancamentoCreate(BaseModel):
     descricao: str
     tipo: str
     valor_total: Decimal
-    data_competencia: date
+    data: date
+    status: str = "a pagar"
+    conta_id: int
     categoria_id: Optional[int] = None
     centro_custo_id: Optional[int] = None
     observacao: Optional[str] = None
-    
-    # Recorrência
-    tipo_recorrencia: str = "unico"  # unico, fixo, parcelado
-    frequencia_recorrencia: Optional[str] = None  # diario, semanal, quinzenal, mensal (para fixos)
-    quantidade_parcelas: Optional[int] = None  # Para parcelados (ex: 12)
 
     @field_validator("valor_total")
     @classmethod
@@ -86,47 +84,16 @@ class LancamentoCreate(BaseModel):
             raise ValueError("O valor deve ser positivo.")
         return v
 
+    @field_validator("status")
+    @classmethod
+    def status_valido(cls, v):
+        if v not in {"pago", "a pagar"}:
+            raise ValueError("status deve ser 'pago' ou 'a pagar'")
+        return v
+
 
 class LancamentoUpdate(LancamentoCreate):
     pass
-
-
-# --- Transação ---
-
-class TransacaoCreate(BaseModel):
-    descricao: str
-    tipo: str
-    valor: Decimal
-    data_pagamento: date
-    conta_id: int
-    forma_pagamento: str
-    status_conciliacao: str = "pendente"
-
-    @field_validator("valor")
-    @classmethod
-    def valor_positivo(cls, v):
-        if v <= 0:
-            raise ValueError("O valor deve ser positivo.")
-        return v
-
-
-class TransacaoUpdate(TransacaoCreate):
-    pass
-
-
-# --- Vínculo ---
-
-class VinculoCreate(BaseModel):
-    lancamento_id: int
-    transacao_id: int
-    valor_vinculado: Decimal
-
-    @field_validator("valor_vinculado")
-    @classmethod
-    def valor_positivo(cls, v):
-        if v <= 0:
-            raise ValueError("O valor deve ser positivo.")
-        return v
 
 
 # --- Usuário ---

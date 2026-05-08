@@ -1,442 +1,307 @@
-# 📚 Documentação — Rotas da API
+# API Routes — Asafe Finance
 
-## Visão Geral
-
-O Asafe Finance oferece uma API RESTful construída com **FastAPI** para gerenciar lançamentos, transações e conciliação bancária.
+Sistema de fluxo de caixa centrado em **lançamentos**. Cada lançamento tem uma única data e status explícito: `pago` ou `a pagar`.
 
 ---
 
-## 🔐 Autenticação
+## Autenticação
 
-Todas as rotas requerem autenticação via JWT em cookies `httpOnly`.
-
-### Login
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "usuario@example.com",
-  "password": "senha123"
-}
-```
-
-**Resposta:** Cookie `access_token` é definido automaticamente.
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/api/auth/login` | Login (seta cookie httpOnly `access_token`) |
+| POST | `/api/auth/logout` | Logout (remove cookie) |
+| GET | `/api/auth/me` | Dados do usuário logado |
+| POST | `/api/auth/alterar-senha` | Alterar senha do usuário logado |
 
 ---
 
-## 💰 Lançamentos
+## Dashboard
 
-### 1. Listar Lançamentos
-
-```http
-GET /api/lancamentos?page=1&tipo=saida&status=previsto&data_inicio=2024-01-01&data_fim=2024-12-31
-```
-
-**Parâmetros de query:**
-- `page`: Número da página (padrão: 1)
-- `tipo`: "entrada" ou "saida"
-- `status`: "previsto", "parcial" ou "realizado"
-- `categoria_id`: ID da categoria
-- `centro_custo_id`: ID do centro de custo
-- `data_inicio`, `data_fim`: Filtro por período (formato: YYYY-MM-DD)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/dashboard` | KPIs: saldo total, entradas/saídas do mês, vencidos, OFX pendentes, gráfico diário |
 
 **Resposta:**
 ```json
 {
-  "items": [
-    {
-      "id": 1,
-      "descricao": "Aluguel",
-      "tipo": "saida",
-      "valor_total": 5000.0,
-      "valor_pago": 5000.0,
-      "data_competencia": "2024-05-01",
-      "status": "realizado",
-      "categoria_id": 2,
-      "categoria_nome": "Infraestrutura",
-      "centro_custo_id": 1,
-      "centro_custo_nome": "Administrativo",
-      "tipo_recorrencia": "fixo",
-      "frequencia_recorrencia": "mensal",
-      "quantidade_parcelas": null,
-      "numero_parcela": null,
-      "lancamento_pai_id": null
-    }
-  ],
-  "total": 150,
-  "page": 1,
-  "per_page": 20
+  "saldo_total": 1500.00,
+  "entradas_mes": 3000.00,
+  "saidas_mes": 1500.00,
+  "lancamentos_vencidos": 2,
+  "ofx_pendentes": 5,
+  "lancamentos_nao_conciliados": 3,
+  "saldos_conta": [...],
+  "chart_labels": ["01/05", "02/05"],
+  "chart_entradas": [0, 500],
+  "chart_saidas": [0, 200]
 }
 ```
 
 ---
 
-### 2. Criar Lançamento
+## Lançamentos
 
-```http
-POST /api/lancamentos
-Content-Type: application/json
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/lancamentos` | Listar lançamentos (paginado, com filtros) |
+| POST | `/api/lancamentos` | Criar lançamento (único, fixo ou parcelado) |
+| PUT | `/api/lancamentos/{id}` | Editar lançamento |
+| DELETE | `/api/lancamentos/{id}` | Excluir lançamento |
+| GET | `/api/lancamentos/{id}/serie` | Listar todos os lançamentos de uma série (fixo/parcelado) |
+| DELETE | `/api/lancamentos/{id}/serie` | Excluir todos os lançamentos de uma série |
+| POST | `/api/lancamentos/{id}/gerar-proximo` | Gerar próxima ocorrência de um lançamento fixo |
 
-{
-  "descricao": "Aluguel",
-  "tipo": "saida",
-  "valor_total": 5000.0,
-  "data_competencia": "2024-05-01",
-  "categoria_id": 2,
-  "centro_custo_id": 1,
-  "observacao": "Aluguel do mês de maio",
-  "tipo_recorrencia": "fixo",
-  "frequencia_recorrencia": "mensal"
-}
-```
+### Filtros (GET /api/lancamentos)
+- `page` — página (default: 1)
+- `tipo` — `entrada` | `saida`
+- `status` — `pago` | `a pagar`
+- `tipo_recorrencia` — `unico` | `fixo` | `parcelado`
+- `status_conciliacao` — `pendente` | `conciliado` | `ignorado`
+- `categoria_id` — ID da categoria
+- `centro_custo_id` — ID do centro de custo
+- `conta_id` — ID da conta
+- `data_inicio` — filtro por `data` >= (YYYY-MM-DD)
+- `data_fim` — filtro por `data` <= (YYYY-MM-DD)
 
-**Tipos de Recorrência:**
-
-#### **`unico`** (padrão)
-Lançamento simples, sem recorrência.
-
+### Body (POST / PUT)
 ```json
 {
-  "descricao": "Compra de material",
-  "tipo": "saida",
-  "valor_total": 500.0,
-  "data_competencia": "2024-05-15",
-  "tipo_recorrencia": "unico"
-}
-```
-
-#### **`fixo`** — Recorrência com Frequência
-Lançamentos que se repetem em intervalos regulares (ex: aluguel mensal, salário).
-
-**Frequências:**
-- `diario`: Todo dia
-- `semanal`: A cada 7 dias
-- `quinzenal`: A cada 15 dias
-- `mensal`: A cada 30 dias
-
-```json
-{
-  "descricao": "Aluguel",
-  "tipo": "saida",
-  "valor_total": 5000.0,
-  "data_competencia": "2024-05-01",
-  "tipo_recorrencia": "fixo",
-  "frequencia_recorrencia": "mensal"
-}
-```
-
-#### **`parcelado`** — Múltiplas Parcelas
-Um lançamento grande é dividido em várias parcelas (ex: 12x sem juros).
-
-```json
-{
-  "descricao": "Equipamento (parcelado)",
-  "tipo": "saida",
-  "valor_total": 1200.0,
-  "data_competencia": "2024-05-01",
-  "tipo_recorrencia": "parcelado",
-  "quantidade_parcelas": 12
-}
-```
-
-**Resultado:** 12 lançamentos são criados automaticamente:
-- Parcela 1: R$100 em 01/05/2024
-- Parcela 2: R$100 em 01/06/2024
-- Parcela 3: R$100 em 01/07/2024
-- ... (até parcela 12)
-
----
-
-### 3. Editar Lançamento
-
-```http
-PUT /api/lancamentos/{lancamento_id}
-Content-Type: application/json
-
-{
-  "descricao": "Aluguel atualizado",
-  "tipo": "saida",
-  "valor_total": 5500.0,
-  "data_competencia": "2024-05-01",
-  "categoria_id": 2,
-  "centro_custo_id": 1,
-  "observacao": "Aluguel reajustado",
-  "tipo_recorrencia": "fixo",
-  "frequencia_recorrencia": "mensal"
-}
-```
-
----
-
-### 4. Deletar Lançamento
-
-```http
-DELETE /api/lancamentos/{lancamento_id}
-```
-
----
-
-### 5. Listar Vínculos de um Lançamento
-
-```http
-GET /api/lancamentos/{lancamento_id}/vinculos
-```
-
-**Resposta:**
-```json
-[
-  {
-    "id": 1,
-    "transacao_id": 5,
-    "transacao_descricao": "Transferência Conta Corrente",
-    "transacao_data": "2024-05-01",
-    "transacao_conta": "Conta Corrente Principal",
-    "valor_vinculado": 5000.0
-  }
-]
-```
-
----
-
-### 6. **NOVO** — Criar Transação Automaticamente para Lançamento
-
-```http
-POST /api/lancamentos/{lancamento_id}/criar-transacao
-Content-Type: application/json
-
-{
-  "conta_id": 1,
-  "forma_pagamento": "transferência"
-}
-```
-
-**O que acontece:**
-1. ✅ Uma transação é criada com o valor e data do lançamento
-2. ✅ A transação é vinculada ao lançamento automaticamente
-3. ✅ O lançamento muda de status para **"realizado"**
-4. ✅ A transação é marcada como **"conciliado"**
-
-**Resposta:**
-```json
-{
-  "lancamento": {
-    "id": 1,
-    "descricao": "Aluguel",
-    "tipo": "saida",
-    "valor_total": 5000.0,
-    "valor_pago": 5000.0,
-    "data_competencia": "2024-05-01",
-    "status": "realizado",
-    "categoria_id": 2,
-    "categoria_nome": "Infraestrutura",
-    "tipo_recorrencia": "fixo",
-    "frequencia_recorrencia": "mensal"
-  },
-  "transacao_id": 42,
-  "mensagem": "Transação criada e vinculada ao lançamento. Status: realizado"
-}
-```
-
-**Uso:** Perfeito para registros rápidos ou pagamentos que já foram efetivados.
-
----
-
-### 7. Desvincular Transação
-
-```http
-DELETE /api/lancamentos/{lancamento_id}/vinculos/{vinculo_id}
-```
-
----
-
-## 💳 Transações
-
-### 1. Listar Transações
-
-```http
-GET /api/transacoes?page=1&conta_id=1&status_conciliacao=pendente
-```
-
----
-
-### 2. Criar Transação
-
-```http
-POST /api/transacoes
-Content-Type: application/json
-
-{
-  "descricao": "Transferência recebida",
+  "descricao": "Dízimos de maio",
   "tipo": "entrada",
-  "valor": 1500.0,
-  "data_pagamento": "2024-05-01",
+  "valor_total": 1500.00,
+  "data": "2026-05-05",
+  "status": "pago",
   "conta_id": 1,
-  "forma_pagamento": "transferência",
-  "status_conciliacao": "pendente"
+  "categoria_id": 1,
+  "centro_custo_id": null,
+  "observacao": null,
+  "tipo_recorrencia": "unico",
+  "frequencia_recorrencia": null,
+  "total_parcelas": null
 }
 ```
 
----
+**Status:**
+- `a pagar` — lançamento previsto (default)
+- `pago` — lançamento realizado; `status_conciliacao` é definido como `pendente` automaticamente
 
-## 🔗 Vínculos (Lançamento ↔ Transação)
+**Recorrência (`tipo_recorrencia`):**
+- `unico` — lançamento avulso (default); os demais campos de recorrência são ignorados
+- `fixo` — se repete indefinidamente na `frequencia_recorrencia`; use `POST /{id}/gerar-proximo` para criar a próxima ocorrência manualmente
+- `parcelado` — dividido em `total_parcelas` parcelas de mesmo valor na `frequencia_recorrencia`; todas as parcelas são criadas de uma vez no POST
 
-### 1. Vincular Transação a Lançamento
+**Frequência (`frequencia_recorrencia`):** obrigatória para `fixo` e `parcelado`
+- `diaria` | `semanal` | `quinzenal` | `mensal`
 
-```http
-POST /api/transacoes/{transacao_id}/vincular
-Content-Type: application/json
-
-{
-  "lancamento_id": 1,
-  "valor_vinculado": 5000.0
-}
-```
-
----
-
-## 📊 Dashboard
-
-### Dados do Dashboard
-
-```http
-GET /api/dashboard
-```
-
-**Resposta:**
+**Exemplo — parcelado em 3x mensais:**
 ```json
 {
-  "resumo_mes_atual": {
-    "entradas": 15000.0,
-    "saidas": 8500.0,
-    "saldo": 6500.0
-  },
-  "fluxo_ultimos_12_meses": [
-    {
-      "mes": "Janeiro",
-      "entradas": 12000.0,
-      "saidas": 7000.0
-    }
-  ],
-  "categorias_top": [
-    {
-      "categoria": "Infraestrutura",
-      "total": 5000.0,
-      "percentual": 58.8
-    }
+  "descricao": "Compra parcelada",
+  "tipo": "saida",
+  "valor_total": 300.00,
+  "data": "2026-05-01",
+  "status": "a pagar",
+  "conta_id": 1,
+  "tipo_recorrencia": "parcelado",
+  "frequencia_recorrencia": "mensal",
+  "total_parcelas": 3
+}
+```
+
+**Exemplo — fixo mensal:**
+```json
+{
+  "descricao": "Aluguel",
+  "tipo": "saida",
+  "valor_total": 1200.00,
+  "data": "2026-05-05",
+  "status": "a pagar",
+  "conta_id": 1,
+  "tipo_recorrencia": "fixo",
+  "frequencia_recorrencia": "mensal"
+}
+```
+
+### Resposta (lançamento único ou fixo)
+```json
+{
+  "id": 1,
+  "descricao": "Dízimos de maio",
+  "tipo": "entrada",
+  "valor_total": 1500.00,
+  "data": "2026-05-05",
+  "status": "pago",
+  "tipo_recorrencia": "unico",
+  "frequencia_recorrencia": null,
+  "total_parcelas": null,
+  "numero_parcela": null,
+  "lancamento_pai_id": null,
+  "status_conciliacao": "pendente",
+  "ofx_transaction_id": null,
+  "conta_id": 1,
+  "conta_nome": "Conta Corrente Principal",
+  "categoria_id": 1,
+  "categoria_nome": "Dízimos",
+  "categoria_icone": "🎵",
+  "centro_custo_id": null,
+  "centro_custo_nome": null,
+  "observacao": null
+}
+```
+
+### Resposta (parcelado — criação retorna todas as parcelas)
+```json
+{
+  "total_criados": 3,
+  "lancamentos": [
+    { "id": 1, "descricao": "Compra parcelada (1/3)", "numero_parcela": 1, "lancamento_pai_id": null, "...": "..." },
+    { "id": 2, "descricao": "Compra parcelada (2/3)", "numero_parcela": 2, "lancamento_pai_id": 1,    "...": "..." },
+    { "id": 3, "descricao": "Compra parcelada (3/3)", "numero_parcela": 3, "lancamento_pai_id": 1,    "...": "..." }
   ]
 }
 ```
 
----
-
-## 📂 Cadastros
-
-### Categorias
-
-#### Listar
-```http
-GET /api/cadastros/categorias
-```
-
-#### Criar
-```http
-POST /api/cadastros/categorias
-Content-Type: application/json
-
+### GET /{id}/serie — Listar série
+```json
 {
-  "nome": "Manutenção",
-  "tipo": "saida",
-  "categoria_pai_id": null,
-  "cor": "#E8A838",
-  "ativo": true
+  "total": 3,
+  "lancamentos": [ { "...": "..." }, "..." ]
 }
 ```
 
+### DELETE /{id}/serie — Excluir série
+```json
+{ "ok": true, "total_excluidos": 3 }
+```
+
+### POST /{id}/gerar-proximo — Gerar próxima ocorrência (apenas `fixo`)
+Retorna o novo lançamento criado com a data calculada conforme a `frequencia_recorrencia`.
+
 ---
+
+## Conciliação Bancária (OFX)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/api/conciliacao/upload` | Upload de arquivo OFX (.ofx/.qfx, max 5 MB) |
+| GET | `/api/conciliacao/pendentes` | Listar transações OFX pendentes com sugestões de match |
+| PUT | `/api/conciliacao/vincular/{ofx_id}` | Vincular transação OFX a lançamento `pago` existente |
+| PUT | `/api/conciliacao/criar-lancamento/{ofx_id}` | Criar novo lançamento `pago` a partir da transação OFX |
+| PUT | `/api/conciliacao/ignorar/{ofx_id}` | Marcar transação OFX como ignorada |
+| PUT | `/api/conciliacao/desvincular/{ofx_id}` | Desfazer conciliação de uma transação OFX |
+| GET | `/api/conciliacao/historico` | Histórico de imports com resumo de status |
+| GET | `/api/conciliacao/diferencas` | Lançamentos sem OFX e OFX sem lançamento no período |
+
+### Upload OFX
+```
+POST /api/conciliacao/upload
+Content-Type: multipart/form-data
+
+conta_id: 1
+file: extrato.ofx
+```
+
+### Vincular
+```json
+PUT /api/conciliacao/vincular/{ofx_id}
+{ "lancamento_id": 15 }
+```
+
+### Criar Lançamento do OFX
+```json
+PUT /api/conciliacao/criar-lancamento/{ofx_id}
+{
+  "categoria_id": 1,
+  "centro_custo_id": null,
+  "observacao": null
+}
+```
+
+### Filtros de pendentes
+- `conta_id` — filtrar por conta
+- `com_sugestoes` — `true` (default) inclui matches calculados
+- `page` — paginação
+
+### Status das transações OFX
+- `pendente` — importada, aguarda conciliação
+- `conciliado` — vinculada a um lançamento `pago`
+- `ignorado` — descartada manualmente
+
+### Algoritmo de Matching
+Peso: valor 50% + data 40% + similaridade de descrição (`difflib`) 10%.
+Score mínimo para sugestão: 0.3. Janela de busca: ±7 dias.
+
+---
+
+## Relatórios
+
+Todos exigem autenticação. Suportam `formato=pdf` ou `formato=excel` para exportação.
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/relatorios/fluxo-caixa` | Fluxo de caixa por mês (lançamentos `pago`) |
+| GET | `/api/relatorios/por-categoria` | Totais por categoria/subcategoria |
+| GET | `/api/relatorios/por-centro-custo` | Totais por centro de custo |
+| GET | `/api/relatorios/previsto-realizado` | Previsto (`a pagar`) vs realizado (`pago`) por categoria |
+| GET | `/api/relatorios/extrato-conta` | Extrato cronológico de uma conta (lançamentos `pago`) |
+
+### Filtros comuns
+- `data_inicio` (YYYY-MM-DD) — default: primeiro dia do mês
+- `data_fim` (YYYY-MM-DD) — default: hoje
+- `conta_id` — filtra por conta (onde aplicável)
+- `formato` — `pdf` | `excel` — força download
+
+---
+
+## Cadastros
 
 ### Contas
 
-#### Listar
-```http
-GET /api/cadastros/contas
-```
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/cadastros/contas` | Listar contas |
+| POST | `/api/cadastros/contas` | Criar conta |
+| PUT | `/api/cadastros/contas/{id}` | Editar conta |
+| DELETE | `/api/cadastros/contas/{id}` | Excluir conta |
 
-#### Criar
-```http
-POST /api/cadastros/contas
-Content-Type: application/json
+**Tipos:** `corrente`, `poupanca`, `caixa`, `outro`
 
+### Categorias
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/cadastros/categorias` | Listar categorias (com subcategorias) |
+| POST | `/api/cadastros/categorias` | Criar categoria (max 2 níveis) |
+| PUT | `/api/cadastros/categorias/{id}` | Editar categoria |
+| DELETE | `/api/cadastros/categorias/{id}` | Excluir categoria |
+
+**Body:**
+```json
 {
-  "nome": "Conta Poupança",
-  "tipo": "poupanca",
-  "saldo_inicial": 10000.0,
+  "nome": "Dízimos",
+  "tipo": "entrada",
+  "cor": "#4CAF7D",
+  "icone": "🎵",
+  "categoria_pai_id": null,
   "ativo": true
 }
 ```
+- `icone` — emoji ou nome de ícone (ex: `"🎵"`, `"music"`, `"fa-church"`)
 
----
+### Centros de Custo
 
-## 📋 Relatórios
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/cadastros/centros-custo` | Listar centros de custo |
+| POST | `/api/cadastros/centros-custo` | Criar centro de custo |
+| PUT | `/api/cadastros/centros-custo/{id}` | Editar centro de custo |
+| DELETE | `/api/cadastros/centros-custo/{id}` | Excluir centro de custo |
 
-### Relatório de Fluxo de Caixa
+### Usuários (admin only)
 
-```http
-GET /api/relatorios/fluxo-caixa?data_inicio=2024-01-01&data_fim=2024-12-31
-```
-
----
-
-## 📤 Exportação
-
-### Exportar para Excel
-
-```http
-GET /api/exportar/excel?data_inicio=2024-01-01&data_fim=2024-12-31&tipo=entrada
-```
-
----
-
-## 🏦 Importação OFX
-
-### Upload de Arquivo OFX
-
-```http
-POST /api/ofx/importar
-Content-Type: multipart/form-data
-
-file: <arquivo.ofx>
-conta_id: 1
-```
-
----
-
-## ⚠️ Códigos de Erro
-
-| Código | Significado |
-|--------|-------------|
-| 400 | Erro de validação (dados inválidos) |
-| 401 | Não autenticado |
-| 403 | Acesso negado |
-| 404 | Recurso não encontrado |
-| 500 | Erro interno do servidor |
-
----
-
-## 🔄 Fluxo Típico
-
-1. **Login** → Recebe cookie de autenticação
-2. **Criar Lançamento** → Registro da intenção contábil
-3. **Importar OFX ou Criar Transação** → Registro da movimentação real
-4. **Vincular** → Conectar lançamento à transação
-5. **Conciliar** → Marcar como conciliado
-6. **Relatório** → Gerar PDF/Excel com dados
-
----
-
-## 📝 Notas
-
-- Todos os valores são em **Decimal(10, 2)** — até R$99.999.999,99
-- Datas no formato **ISO 8601**: `YYYY-MM-DD`
-- **Status do lançamento** é calculado automaticamente com base nos vínculos
-- **Recorrências** (fixo/parcelado) geram lançamentos automaticamente
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/cadastros/usuarios` | Listar usuários |
+| POST | `/api/cadastros/usuarios` | Criar usuário |
+| PUT | `/api/cadastros/usuarios/{id}` | Editar usuário |
+| DELETE | `/api/cadastros/usuarios/{id}` | Excluir usuário |

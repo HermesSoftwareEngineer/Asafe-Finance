@@ -11,7 +11,6 @@ from app.api import (
     auth as api_auth,
     dashboard as api_dashboard,
     lancamentos as api_lancamentos,
-    transacoes as api_transacoes,
     conciliacao as api_conciliacao,
     relatorios as api_relatorios,
     cadastros as api_cadastros,
@@ -87,7 +86,6 @@ app.add_middleware(
 app.include_router(api_auth.router)
 app.include_router(api_dashboard.router)
 app.include_router(api_lancamentos.router)
-app.include_router(api_transacoes.router)
 app.include_router(api_conciliacao.router)
 app.include_router(api_relatorios.router)
 app.include_router(api_cadastros.router)

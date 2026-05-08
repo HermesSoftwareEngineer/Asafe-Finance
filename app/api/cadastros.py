@@ -26,6 +26,7 @@ class CategoriaBody(BaseModel):
     nome: str
     tipo: str
     cor: str = "#D4AF37"
+    icone: Optional[str] = None
     categoria_pai_id: Optional[int] = None
     ativo: bool = True
 
@@ -126,6 +127,7 @@ def _categoria_to_dict(cat: Categoria, include_subcategorias: bool = True) -> di
         "nome": cat.nome,
         "tipo": cat.tipo,
         "cor": cat.cor,
+        "icone": cat.icone,
         "ativo": cat.ativo,
         "categoria_pai_id": cat.categoria_pai_id,
     }
@@ -162,6 +164,7 @@ def criar_categoria(
         nome=body.nome,
         tipo=body.tipo,
         cor=body.cor,
+        icone=body.icone or None,
         categoria_pai_id=body.categoria_pai_id or None,
         ativo=body.ativo,
     )
@@ -190,6 +193,7 @@ def editar_categoria(
     cat.nome = body.nome
     cat.tipo = body.tipo
     cat.cor = body.cor
+    cat.icone = body.icone or None
     cat.categoria_pai_id = body.categoria_pai_id or None
     cat.ativo = body.ativo
     db.commit()

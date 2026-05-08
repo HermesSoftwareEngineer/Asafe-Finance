@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -270,17 +270,16 @@ def extrato_conta(
 
     conta, rows_data = relatorio_service.extrato_conta(db, conta_id, di, df)
     if not conta:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Conta não encontrada")
 
     if formato == "pdf":
         headers = ["Data", "Descrição", "Tipo", "Valor (R$)", "Saldo (R$)"]
         rows = [
             [
-                r["transacao"].data_pagamento.strftime("%d/%m/%Y"),
-                r["transacao"].descricao,
-                r["transacao"].tipo,
-                f"{r['transacao'].valor:.2f}",
+                r["lancamento"].data.strftime("%d/%m/%Y"),
+                r["lancamento"].descricao,
+                r["lancamento"].tipo,
+                f"{r['lancamento'].valor_total:.2f}",
                 f"{r['saldo_corrente']:.2f}",
             ]
             for r in rows_data
@@ -294,10 +293,10 @@ def extrato_conta(
         headers = ["Data", "Descrição", "Tipo", "Valor (R$)", "Saldo (R$)"]
         rows = [
             [
-                r["transacao"].data_pagamento.strftime("%d/%m/%Y"),
-                r["transacao"].descricao,
-                r["transacao"].tipo,
-                float(r["transacao"].valor),
+                r["lancamento"].data.strftime("%d/%m/%Y"),
+                r["lancamento"].descricao,
+                r["lancamento"].tipo,
+                float(r["lancamento"].valor_total),
                 float(r["saldo_corrente"]),
             ]
             for r in rows_data
@@ -315,12 +314,11 @@ def extrato_conta(
         "data_fim": df.isoformat(),
         "items": [
             {
-                "id": r["transacao"].id,
-                "descricao": r["transacao"].descricao,
-                "tipo": r["transacao"].tipo,
-                "valor": float(r["transacao"].valor),
-                "data_pagamento": r["transacao"].data_pagamento.isoformat(),
-                "forma_pagamento": r["transacao"].forma_pagamento,
+                "id": r["lancamento"].id,
+                "descricao": r["lancamento"].descricao,
+                "tipo": r["lancamento"].tipo,
+                "valor_total": float(r["lancamento"].valor_total),
+                "data": r["lancamento"].data.isoformat(),
                 "saldo_corrente": float(r["saldo_corrente"]),
             }
             for r in rows_data
