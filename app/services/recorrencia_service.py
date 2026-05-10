@@ -44,6 +44,39 @@ def todos_da_serie(db: Session, lancamento_id: int) -> list[Lancamento]:
     ).order_by(Lancamento.data).all()
 
 
+def _serie_completa(db: Session, lancamento_id: int):
+    lanc = db.query(Lancamento).filter(Lancamento.id == lancamento_id).first()
+    if not lanc:
+        return None, []
+    raiz = _raiz_da_serie(db, lancamento_id)
+    if not raiz:
+        return None, []
+    serie = db.query(Lancamento).filter(
+        or_(Lancamento.id == raiz.id, Lancamento.lancamento_pai_id == raiz.id)
+    ).order_by(Lancamento.data).all()
+    return raiz, serie
+
+
+def futuros_da_serie(db: Session, lancamento_id: int) -> list[Lancamento]:
+    raiz, serie = _serie_completa(db, lancamento_id)
+    if not raiz:
+        return []
+    atual = db.query(Lancamento).filter(Lancamento.id == lancamento_id).first()
+    if not atual:
+        return []
+    return [l for l in serie if l.data >= atual.data]
+
+
+def promover_novo_raiz(db: Session, lancamento_id: int) -> None:
+    raiz, serie = _serie_completa(db, lancamento_id)
+    if not raiz or len(serie) <= 1:
+        return
+    novo_raiz = serie[1]
+    novo_raiz.lancamento_pai_id = None
+    for l in serie[2:]:
+        l.lancamento_pai_id = novo_raiz.id
+
+
 def gerar_parcelas(
     db: Session,
     pai: Lancamento,

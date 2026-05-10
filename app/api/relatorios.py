@@ -1,7 +1,7 @@
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -77,22 +77,24 @@ def fluxo_caixa(
 def por_categoria(
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
+    categoria_ids: Optional[List[int]] = Query(None),
+    granularidade: str = Query("mes", regex="^(dia|semana|mes)$"),
     formato: Optional[str] = None,
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     di, df = _parse_datas(data_inicio, data_fim)
-    dados = relatorio_service.por_categoria(db, di, df)
+    dados = relatorio_service.por_categoria(db, di, df, categoria_ids, granularidade)
 
     if formato == "pdf":
         headers = ["Categoria", "Subcategoria", "Total (R$)"]
         rows = []
-        for d in dados:
+        for d in dados["categorias"]:
             if d["subcategorias"]:
                 for s in d["subcategorias"]:
-                    rows.append([d["categoria"].nome, s["categoria"].nome, f"{s['total']:.2f}"])
+                    rows.append([d["categoria_nome"], s["categoria_nome"], f"{s['total']:.2f}"])
             else:
-                rows.append([d["categoria"].nome, "-", f"{d['total']:.2f}"])
+                rows.append([d["categoria_nome"], "-", f"{d['total']:.2f}"])
         pdf = export_service.export_pdf("Relatório por Categoria", headers, rows)
         return Response(
             pdf, media_type="application/pdf",
@@ -101,12 +103,12 @@ def por_categoria(
     if formato == "excel":
         headers = ["Categoria", "Subcategoria", "Total (R$)"]
         rows = []
-        for d in dados:
+        for d in dados["categorias"]:
             if d["subcategorias"]:
                 for s in d["subcategorias"]:
-                    rows.append([d["categoria"].nome, s["categoria"].nome, float(s["total"])])
+                    rows.append([d["categoria_nome"], s["categoria_nome"], float(s["total"])])
             else:
-                rows.append([d["categoria"].nome, "-", float(d["total"])])
+                rows.append([d["categoria_nome"], "-", float(d["total"])])
         xls = export_service.export_excel("Por Categoria", headers, rows)
         return Response(
             xls,
@@ -114,25 +116,15 @@ def por_categoria(
             headers={"Content-Disposition": "attachment; filename=por_categoria.xlsx"},
         )
 
-    result = []
-    for d in dados:
-        item = {
-            "categoria_id": d["categoria"].id,
-            "categoria_nome": d["categoria"].nome,
-            "categoria_tipo": d["categoria"].tipo,
-            "total": float(d["total"]),
-            "subcategorias": [
-                {
-                    "categoria_id": s["categoria"].id,
-                    "categoria_nome": s["categoria"].nome,
-                    "total": float(s["total"]),
-                }
-                for s in d["subcategorias"]
-            ],
-        }
-        result.append(item)
-
-    return {"data_inicio": di.isoformat(), "data_fim": df.isoformat(), "items": result}
+    return {
+        "data_inicio": di.isoformat(),
+        "data_fim": df.isoformat(),
+        "granularidade": granularidade,
+        "filtros": {"categoria_ids": categoria_ids},
+        "categorias": dados["categorias"],
+        "pie": dados["pie"],
+        "series": dados["series"],
+    }
 
 
 @router.get("/por-centro-custo")

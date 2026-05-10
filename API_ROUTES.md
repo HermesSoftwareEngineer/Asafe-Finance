@@ -45,11 +45,25 @@ Sistema de fluxo de caixa centrado em **lançamentos**. Cada lançamento tem uma
 |--------|------|-----------|
 | GET | `/api/lancamentos` | Listar lançamentos (paginado, com filtros) |
 | POST | `/api/lancamentos` | Criar lançamento (único, fixo ou parcelado) |
-| PUT | `/api/lancamentos/{id}` | Editar lançamento |
-| DELETE | `/api/lancamentos/{id}` | Excluir lançamento |
+| PUT | `/api/lancamentos/{id}` | Editar lançamento (opções: apenas este, todos da sequência, apenas este e futuros) |
+| DELETE | `/api/lancamentos/{id}` | Excluir lançamento (opções: apenas este, todos da sequência, apenas este e futuros) |
 | GET | `/api/lancamentos/{id}/serie` | Listar todos os lançamentos de uma série (fixo/parcelado) |
 | DELETE | `/api/lancamentos/{id}/serie` | Excluir todos os lançamentos de uma série |
 | POST | `/api/lancamentos/{id}/gerar-proximo` | Gerar próxima ocorrência de um lançamento fixo |
+
+### Escopo de edição/exclusão em lançamentos recorrentes
+Os endpoints `PUT /api/lancamentos/{id}` e `DELETE /api/lancamentos/{id}` aceitam o query param `scope` com valores:
+- `only` — aplica apenas ao lançamento atual
+- `all` — aplica a toda a sequência (root + todas as ocorrências)
+- `future` — aplica ao lançamento atual e às ocorrências futuras da sequência
+
+Exemplos:
+- `PUT /api/lancamentos/123?scope=only`
+- `PUT /api/lancamentos/123?scope=all`
+- `PUT /api/lancamentos/123?scope=future`
+- `DELETE /api/lancamentos/123?scope=only`
+- `DELETE /api/lancamentos/123?scope=all`
+- `DELETE /api/lancamentos/123?scope=future`
 
 ### Filtros (GET /api/lancamentos)
 - `page` — página (default: 1)
@@ -240,15 +254,179 @@ Todos exigem autenticação. Suportam `formato=pdf` ou `formato=excel` para expo
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/api/relatorios/fluxo-caixa` | Fluxo de caixa por mês (lançamentos `pago`) |
-| GET | `/api/relatorios/por-categoria` | Totais por categoria/subcategoria |
+| GET | `/api/relatorios/por-categoria` | Totais por categoria/subcategoria; tabela + dados para gráfico de pizza e linha; gráfico de pizza e série temporal (todas contas, `pago` e `a pagar`) |
 | GET | `/api/relatorios/por-centro-custo` | Totais por centro de custo |
 | GET | `/api/relatorios/previsto-realizado` | Previsto (`a pagar`) vs realizado (`pago`) por categoria |
 | GET | `/api/relatorios/extrato-conta` | Extrato cronológico de uma conta (lançamentos `pago`) |
+
+### Formato de retorno dos relatórios
+
+#### GET `/api/relatorios/fluxo-caixa`
+Retorna uma lista de períodos com totais de entradas, saídas, saldo e saldo acumulado.
+
+```json
+{
+  "data_inicio": "2026-05-01",
+  "data_fim": "2026-05-31",
+  "conta_id": 1,
+  "items": [
+    {
+      "periodo": "2026-05",
+      "entradas": 3000.0,
+      "saidas": 1500.0,
+      "saldo": 1500.0,
+      "saldo_acumulado": 1500.0
+    }
+  ]
+}
+```
+
+#### GET `/api/relatorios/por-categoria`
+Retorna:
+- `categorias`: totais por categoria e subcategorias;
+- `pie`: dados para gráfico de pizza, separados em `entrada` e `saida`;
+- `series`: dados de linha ao longo do tempo, conforme `granularidade`.
+
+```json
+{
+  "data_inicio": "2026-05-01",
+  "data_fim": "2026-05-31",
+  "granularidade": "mes",
+  "filtros": {
+    "categoria_ids": [1, 2]
+  },
+  "categorias": [
+    {
+      "categoria_id": 1,
+      "categoria_nome": "Dízimos",
+      "categoria_tipo": "entrada",
+      "total": 1500.0,
+      "subcategorias": [
+        {
+          "categoria_id": 10,
+          "categoria_nome": "Dízimos Especiais",
+          "total": 500.0
+        }
+      ]
+    },
+    {
+      "categoria_id": 2,
+      "categoria_nome": "Aluguel",
+      "categoria_tipo": "saida",
+      "total": 1200.0,
+      "subcategorias": []
+    }
+  ],
+  "pie": {
+    "entrada": {
+      "total": 1500.0,
+      "items": [
+        {
+          "categoria_id": 1,
+          "categoria_nome": "Dízimos",
+          "total": 1500.0,
+          "percentual": 100.0
+        },
+        {
+          "categoria_id": 10,
+          "categoria_nome": "Dízimos Especiais",
+          "categoria_pai_id": 1,
+          "total": 500.0,
+          "percentual": 33.33
+        }
+      ]
+    },
+    "saida": {
+      "total": 1200.0,
+      "items": [
+        {
+          "categoria_id": 2,
+          "categoria_nome": "Aluguel",
+          "total": 1200.0,
+          "percentual": 100.0
+        }
+      ]
+    }
+  },
+  "series": {
+    "granularidade": "mes",
+    "items": [
+      {
+        "periodo": "2026-05",
+        "entrada": 1500.0,
+        "saida": 1200.0,
+        "saldo": 300.0
+      }
+    ]
+  }
+}
+```
+
+#### GET `/api/relatorios/por-centro-custo`
+Retorna totais agrupados por centro de custo.
+
+```json
+{
+  "data_inicio": "2026-05-01",
+  "data_fim": "2026-05-31",
+  "items": [
+    {
+      "centro_id": 1,
+      "centro_nome": "Marketing",
+      "entradas": 500.0,
+      "saidas": 1200.0,
+      "saldo": -700.0
+    }
+  ]
+}
+```
+
+#### GET `/api/relatorios/previsto-realizado`
+Retorna totais previstos e realizados por categoria.
+
+```json
+{
+  "data_inicio": "2026-05-01",
+  "data_fim": "2026-05-31",
+  "items": [
+    {
+      "categoria_id": 2,
+      "categoria_nome": "Aluguel",
+      "previsto": 1200.0,
+      "realizado": 900.0,
+      "diferenca": -300.0,
+      "percentual": 75.0
+    }
+  ]
+}
+```
+
+#### GET `/api/relatorios/extrato-conta`
+Retorna histórico cronológico de lançamentos `pago` para uma conta.
+
+```json
+{
+  "conta_id": 1,
+  "conta_nome": "Conta Corrente Principal",
+  "items": [
+    {
+      "lancamento_id": 10,
+      "data": "2026-05-05",
+      "descricao": "Salário",
+      "valor_total": 3000.0,
+      "tipo": "entrada",
+      "saldo_corrente": 4500.0
+    }
+  ]
+}
+```
 
 ### Filtros comuns
 - `data_inicio` (YYYY-MM-DD) — default: primeiro dia do mês
 - `data_fim` (YYYY-MM-DD) — default: hoje
 - `conta_id` — filtra por conta (onde aplicável)
+- `categoria_ids` — lista de IDs de categoria/subcategoria para filtrar o relatório por categoria
+- `granularidade` — `dia` | `semana` | `mes` — controla a série temporal no relatório por categoria
 - `formato` — `pdf` | `excel` — força download
 
 ---

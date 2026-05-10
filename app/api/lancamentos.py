@@ -92,6 +92,31 @@ def _aplicar_status_conciliacao(lancamento: Lancamento, novo_status: str) -> Non
             lancamento.status_conciliacao = None
 
 
+def _descricao_para_lancamento(base_descricao: str, lancamento: Lancamento) -> str:
+    if lancamento.tipo_recorrencia == "parcelado" and lancamento.numero_parcela and lancamento.total_parcelas:
+        return f"{base_descricao} ({lancamento.numero_parcela}/{lancamento.total_parcelas})"
+    return base_descricao
+
+
+def _atualizar_lancamento_campos(
+    lancamento: Lancamento,
+    body: LancamentoBody,
+    aplicar_data: bool = True,
+    atualizar_descricao_parcelas: bool = False,
+) -> None:
+    lancamento.descricao = _descricao_para_lancamento(body.descricao if atualizar_descricao_parcelas else body.descricao, lancamento)
+    lancamento.tipo = body.tipo
+    lancamento.valor_total = Decimal(str(body.valor_total))
+    if aplicar_data:
+        lancamento.data = _parse_date(body.data)
+    lancamento.status = body.status
+    lancamento.conta_id = body.conta_id
+    lancamento.categoria_id = body.categoria_id or None
+    lancamento.centro_custo_id = body.centro_custo_id or None
+    lancamento.observacao = body.observacao
+    _aplicar_status_conciliacao(lancamento, body.status)
+
+
 # ─── LISTAR ───────────────────────────────────────────────────────────────────
 
 @router.get("")
@@ -197,6 +222,7 @@ def criar_lancamento(
 def editar_lancamento(
     lancamento_id: int,
     body: LancamentoBody,
+    scope: str = Query("only", regex="^(only|all|future)$"),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -208,20 +234,29 @@ def editar_lancamento(
     if body.status not in STATUS_VALIDOS:
         raise HTTPException(status_code=400, detail="status deve ser 'pago' ou 'a pagar'")
 
-    lancamento.descricao = body.descricao
-    lancamento.tipo = body.tipo
-    lancamento.valor_total = Decimal(str(body.valor_total))
-    lancamento.data = _parse_date(body.data)
-    lancamento.status = body.status
-    lancamento.conta_id = body.conta_id
-    lancamento.categoria_id = body.categoria_id or None
-    lancamento.centro_custo_id = body.centro_custo_id or None
-    lancamento.observacao = body.observacao
-    _aplicar_status_conciliacao(lancamento, body.status)
+    if scope == "only":
+        _atualizar_lancamento_campos(lancamento, body, aplicar_data=True, atualizar_descricao_parcelas=True)
+        db.commit()
+        db.refresh(lancamento)
+        return _lancamento_to_dict(lancamento)
+
+    raiz, serie = recorrencia_service._serie_completa(db, lancamento_id)
+    if not serie:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+    if scope == "all":
+        targets = serie
+    else:
+        targets = [l for l in serie if l.data >= lancamento.data]
+
+    for l in targets:
+        aplicar_data = l.id == lancamento.id
+        _atualizar_lancamento_campos(l, body, aplicar_data=aplicar_data, atualizar_descricao_parcelas=True)
 
     db.commit()
-    db.refresh(lancamento)
-    return _lancamento_to_dict(lancamento)
+    return {
+        "updated": [_lancamento_to_dict(l) for l in targets]
+    }
 
 
 # ─── EXCLUIR ──────────────────────────────────────────────────────────────────
@@ -229,15 +264,37 @@ def editar_lancamento(
 @router.delete("/{lancamento_id}")
 def excluir_lancamento(
     lancamento_id: int,
+    scope: str = Query("only", regex="^(only|all|future)$"),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     lancamento = db.query(Lancamento).filter(Lancamento.id == lancamento_id).first()
     if not lancamento:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado")
-    db.delete(lancamento)
+
+    if scope == "only":
+        if lancamento.tipo_recorrencia != "unico" or lancamento.lancamento_pai_id is not None:
+            raiz, serie = recorrencia_service._serie_completa(db, lancamento_id)
+            if serie and serie[0].id == lancamento.id and len(serie) > 1:
+                recorrencia_service.promover_novo_raiz(db, lancamento_id)
+        db.delete(lancamento)
+        db.commit()
+        return {"ok": True, "total_excluidos": 1}
+
+    raiz, serie = recorrencia_service._serie_completa(db, lancamento_id)
+    if not serie:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+    if scope == "all":
+        targets = serie
+    else:
+        targets = [l for l in serie if l.data >= lancamento.data]
+
+    for l in targets:
+        db.delete(l)
+
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "total_excluidos": len(targets)}
 
 
 # ─── SÉRIE (fixo/parcelado) ───────────────────────────────────────────────────
