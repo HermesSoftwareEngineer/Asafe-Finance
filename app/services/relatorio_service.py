@@ -259,3 +259,39 @@ def extrato_conta(db: Session, conta_id: int, data_inicio: date, data_fim: date)
             saldo_corrente -= l.valor_total
         rows.append({"lancamento": l, "saldo_corrente": saldo_corrente})
     return conta, rows
+
+
+def saldo_contas(db: Session, data_alvo: date, conta_id: Optional[int] = None):
+    q_contas = db.query(Conta).filter(Conta.ativo == True)
+    if conta_id:
+        q_contas = q_contas.filter(Conta.id == conta_id)
+    contas = q_contas.all()
+
+    rows = []
+    for conta in contas:
+        lancamentos = (
+            db.query(Lancamento)
+            .filter(
+                Lancamento.conta_id == conta.id,
+                Lancamento.status == "pago",
+                Lancamento.data <= data_alvo
+            )
+            .all()
+        )
+        
+        saldo = conta.saldo_inicial
+        entradas = sum(l.valor_total for l in lancamentos if l.tipo == "entrada")
+        saidas = sum(l.valor_total for l in lancamentos if l.tipo == "saida")
+        saldo += entradas - saidas
+        
+        rows.append({
+            "conta_id": conta.id,
+            "conta_nome": conta.nome,
+            "conta_tipo": conta.tipo,
+            "saldo_inicial": conta.saldo_inicial,
+            "entradas": entradas,
+            "saidas": saidas,
+            "saldo": saldo,
+        })
+        
+    return rows

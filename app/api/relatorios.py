@@ -316,3 +316,71 @@ def extrato_conta(
             for r in rows_data
         ],
     }
+
+
+@router.get("/saldo")
+def saldo_contas(
+    data_alvo: Optional[date] = None,
+    conta_id: Optional[int] = None,
+    formato: Optional[str] = None,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    dt = data_alvo or date.today()
+    dados = relatorio_service.saldo_contas(db, dt, conta_id)
+
+    if formato == "pdf":
+        headers = ["Conta", "Tipo", "Saldo Inicial (R$)", "Entradas (R$)", "Saídas (R$)", "Saldo Atual (R$)"]
+        rows = [
+            [
+                d["conta_nome"],
+                d["conta_tipo"],
+                f"{d['saldo_inicial']:.2f}",
+                f"{d['entradas']:.2f}",
+                f"{d['saidas']:.2f}",
+                f"{d['saldo']:.2f}",
+            ]
+            for d in dados
+        ]
+        pdf = export_service.export_pdf(f"Saldo das Contas - {dt.strftime('%d/%m/%Y')}", headers, rows)
+        return Response(
+            pdf, media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=saldo_contas.pdf"},
+        )
+    if formato == "excel":
+        headers = ["Conta", "Tipo", "Saldo Inicial (R$)", "Entradas (R$)", "Saídas (R$)", "Saldo Atual (R$)"]
+        rows = [
+            [
+                d["conta_nome"],
+                d["conta_tipo"],
+                float(d["saldo_inicial"]),
+                float(d["entradas"]),
+                float(d["saidas"]),
+                float(d["saldo"]),
+            ]
+            for d in dados
+        ]
+        xls = export_service.export_excel("Saldo das Contas", headers, rows)
+        return Response(
+            xls,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=saldo_contas.xlsx"},
+        )
+
+    return {
+        "data_alvo": dt.isoformat(),
+        "conta_id": conta_id,
+        "saldo_total": float(sum(d["saldo"] for d in dados)),
+        "items": [
+            {
+                "conta_id": d["conta_id"],
+                "conta_nome": d["conta_nome"],
+                "conta_tipo": d["conta_tipo"],
+                "saldo_inicial": float(d["saldo_inicial"]),
+                "entradas": float(d["entradas"]),
+                "saidas": float(d["saidas"]),
+                "saldo": float(d["saldo"]),
+            }
+            for d in dados
+        ],
+    }

@@ -258,6 +258,7 @@ Todos exigem autenticação. Suportam `formato=pdf` ou `formato=excel` para expo
 | GET | `/api/relatorios/por-centro-custo` | Totais por centro de custo |
 | GET | `/api/relatorios/previsto-realizado` | Previsto (`a pagar`) vs realizado (`pago`) por categoria |
 | GET | `/api/relatorios/extrato-conta` | Extrato cronológico de uma conta (lançamentos `pago`) |
+| GET | `/api/relatorios/saldo` | Saldo de todas ou de uma conta específica até uma determinada data (`data_alvo`) |
 
 ### Formato de retorno dos relatórios
 
@@ -421,7 +422,30 @@ Retorna histórico cronológico de lançamentos `pago` para uma conta.
 }
 ```
 
+#### GET `/api/relatorios/saldo`
+Retorna os saldos calculados das contas com base no saldo inicial, entradas e saídas até a data informada (`data_alvo`).
+
+```json
+{
+  "data_alvo": "2026-05-10",
+  "conta_id": null,
+  "saldo_total": 15000.50,
+  "items": [
+    {
+      "conta_id": 1,
+      "conta_nome": "Conta Corrente Principal",
+      "conta_tipo": "corrente",
+      "saldo_inicial": 0.0,
+      "entradas": 20000.0,
+      "saidas": 5000.0,
+      "saldo": 15000.0
+    }
+  ]
+}
+```
+
 ### Filtros comuns
+- `data_alvo` (YYYY-MM-DD) — data final para a busca de saldo (exclusivo para `/api/relatorios/saldo`). Default: hoje
 - `data_inicio` (YYYY-MM-DD) — default: primeiro dia do mês
 - `data_fim` (YYYY-MM-DD) — default: hoje
 - `conta_id` — filtra por conta (onde aplicável)
